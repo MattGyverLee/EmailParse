@@ -52,35 +52,19 @@ class TestGmailClient:
         assert client.is_connected is False
     
     @pytest.mark.unit
-    def test_authenticate_app_password_success(self, mock_config):
-        """Test successful app password authentication"""
-        mock_conn = MagicMock()
-        mock_conn.login.return_value = ('OK', ['Success'])
-        
+    def test_authenticate_oauth2_requires_setup(self, mock_config):
+        """Test OAuth2 authentication requires interactive setup"""
         client = GmailClient(mock_config)
-        client.connection = mock_conn
+        client.connection = MagicMock()
         client.is_connected = True
         
-        result = client.authenticate()
-        
-        assert result is True
-        mock_conn.login.assert_called_once_with(
-            'test@gmail.com', 
-            'test-app-password-16'
-        )
-    
-    @pytest.mark.unit
-    def test_authenticate_app_password_failure(self, mock_config):
-        """Test app password authentication failure"""
-        mock_conn = MagicMock()
-        mock_conn.login.return_value = ('NO', ['Authentication failed'])
-        
-        client = GmailClient(mock_config)
-        client.connection = mock_conn
-        client.is_connected = True
-        
-        with pytest.raises(GmailError, match="Authentication failed"):
-            client.authenticate()
+        # Mock OAuth2 to raise an error (simulating setup failure)
+        with patch('emailparse.gmail_oauth.GmailOAuth') as mock_oauth_class:
+            mock_oauth = mock_oauth_class.return_value
+            mock_oauth.authenticate.side_effect = Exception("OAuth2 setup required")
+            
+            with pytest.raises(GmailError):
+                client.authenticate()
     
     @pytest.mark.unit
     def test_authenticate_not_connected(self, mock_config):
@@ -357,10 +341,14 @@ class TestGmailClient:
     
     @pytest.mark.unit
     def test_oauth2_string_creation(self, mock_config):
-        """Test OAuth2 authentication string creation"""
-        client = GmailClient(mock_config)
+        """Test OAuth2 authentication string creation via GmailOAuth"""
+        from emailparse.gmail_oauth import GmailOAuth
+        import time
         
-        auth_string = client._create_oauth2_string("test@gmail.com", "access_token_123")
+        oauth = GmailOAuth()
+        oauth.access_token = "access_token_123"  # Set token directly for testing
+        oauth.expires_at = time.time() + 3600    # Set token to be valid for 1 hour
+        auth_string = oauth.create_xoauth2_string("test@gmail.com")
         
         # Should be base64 encoded
         import base64
@@ -444,7 +432,15 @@ class TestGmailClientIntegration:
             ])
         ]
         
-        with patch('emailparse.gmail_client.imaplib.IMAP4_SSL', return_value=mock_conn):
+        with patch('emailparse.gmail_client.imaplib.IMAP4_SSL', return_value=mock_conn), \
+             patch('emailparse.gmail_oauth.GmailOAuth') as mock_oauth_class:
+            
+            # Mock OAuth2 authentication
+            mock_oauth = mock_oauth_class.return_value
+            mock_oauth.authenticate.return_value = 'fake_access_token'
+            mock_oauth.create_xoauth2_string.return_value = b'fake_xoauth2_string'
+            mock_conn.authenticate.return_value = ('OK', [b'Authentication successful'])
+            
             client = GmailClient(mock_config)
             
             # Full flow: connect, auth, select, search, fetch

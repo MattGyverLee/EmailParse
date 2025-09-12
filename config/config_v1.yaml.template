@@ -10,18 +10,15 @@ gmail:
   # Account details
   user: "your-email@gmail.com"  # Your Gmail address
   
-  # Authentication (choose one method)
+  # Authentication - OAuth2 (interactive setup)
   auth:
-    method: "app_password"  # Options: "app_password" or "oauth2"
+    method: "oauth2"  # Only method supported (Google deprecated app passwords)
     
-    # For app_password method (simpler):
-    app_password: "your-16-char-app-password"  # Generate in Google Account settings
-    
-    # For oauth2 method (more secure):
-    # oauth2:
-    #   client_id: "your-client-id.apps.googleusercontent.com"
-    #   client_secret: "your-client-secret"
-    #   refresh_token: "your-refresh-token"
+    # OAuth2 credentials (optional - will prompt during first run)
+    oauth2:
+      client_id: ""  # Will be set during interactive setup
+      client_secret: ""  # Will be set during interactive setup
+      token_file: "gmail_tokens.json"  # Where to store refresh tokens
 
   # Email processing settings
   processing:

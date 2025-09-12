@@ -79,7 +79,7 @@ class GmailClient:
     
     def authenticate(self) -> bool:
         """
-        Authenticate with Gmail
+        Authenticate with Gmail using interactive OAuth2
         
         Returns:
             True if authentication successful
@@ -90,76 +90,46 @@ class GmailClient:
         if not self.is_connected:
             raise GmailError("Must connect before authenticating")
         
-        auth_config = self.gmail_config.get('auth', {})
-        auth_method = auth_config.get('method')
         user = self.gmail_config.get('user')
-        
         if not user:
             raise GmailError("Gmail user not specified in configuration")
         
         try:
-            if auth_method == 'app_password':
-                app_password = auth_config.get('app_password')
-                if not app_password:
-                    raise GmailError("App password not found in configuration")
-                
-                logger.info("Authenticating with app password")
-                result = self.connection.login(user, app_password)
-                
-            elif auth_method == 'oauth2':
-                oauth_config = auth_config.get('oauth2', {})
-                access_token = self._get_oauth_access_token(oauth_config)
-                
-                logger.info("Authenticating with OAuth2")
-                auth_string = self._create_oauth2_string(user, access_token)
-                result = self.connection.authenticate('XOAUTH2', lambda x: auth_string)
-                
-            else:
-                raise GmailError(f"Unsupported authentication method: {auth_method}")
+            # Always use OAuth2 - app passwords are deprecated
+            logger.info("Authenticating with OAuth2")
+            
+            # Import OAuth handler
+            from .gmail_oauth import GmailOAuth
+            
+            # Initialize OAuth with any configured credentials
+            auth_config = self.gmail_config.get('auth', {})
+            oauth_config = auth_config.get('oauth2', {})
+            
+            oauth = GmailOAuth(
+                client_id=oauth_config.get('client_id'),
+                client_secret=oauth_config.get('client_secret'),
+                token_file=oauth_config.get('token_file', 'gmail_tokens.json')
+            )
+            
+            # Authenticate and get XOAUTH2 string
+            access_token = oauth.authenticate()
+            auth_string = oauth.create_xoauth2_string(user)
+            
+            # Authenticate with Gmail IMAP
+            result = self.connection.authenticate('XOAUTH2', lambda x: auth_string.encode('utf-8'))
             
             if result[0] == 'OK':
-                logger.info("Authentication successful")
+                logger.info("OAuth2 authentication successful")
                 return True
             else:
-                raise GmailError(f"Authentication failed: {result[1]}")
+                raise GmailError(f"IMAP authentication failed: {result[1]}")
                 
         except Exception as e:
-            raise GmailError(f"Authentication error: {e}")
+            if "gmail_oauth" in str(e):
+                raise GmailError(f"OAuth setup required: {e}")
+            else:
+                raise GmailError(f"Authentication error: {e}")
     
-    def _get_oauth_access_token(self, oauth_config: Dict[str, Any]) -> str:
-        """
-        Get OAuth2 access token (placeholder for now)
-        
-        Args:
-            oauth_config: OAuth configuration
-            
-        Returns:
-            Access token string
-            
-        Note:
-            This is a placeholder implementation. In Phase 2.0, we'll implement
-            full OAuth2 token refresh using the refresh token.
-        """
-        # For now, assume we have a valid access token
-        # In Phase 2.0, we'll implement token refresh logic
-        access_token = oauth_config.get('access_token')
-        if not access_token:
-            raise GmailError("OAuth2 access token not available. Please implement token refresh.")
-        return access_token
-    
-    def _create_oauth2_string(self, user: str, access_token: str) -> str:
-        """
-        Create OAuth2 authentication string
-        
-        Args:
-            user: Email address
-            access_token: OAuth2 access token
-            
-        Returns:
-            Base64-encoded authentication string
-        """
-        auth_string = f'user={user}\x01auth=Bearer {access_token}\x01\x01'
-        return base64.b64encode(auth_string.encode()).decode()
     
     def select_mailbox(self, mailbox: str = "INBOX", readonly: bool = True) -> bool:
         """

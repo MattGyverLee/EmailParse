@@ -65,43 +65,44 @@ class TestConfig:
             Config(str(config_file))
 
     @pytest.mark.unit
-    def test_config_validation_missing_app_password(self, temp_dir):
-        """Test that app_password method without password fails validation"""
+    def test_config_validation_non_oauth2_method(self, temp_dir):
+        """Test that non-OAuth2 method fails validation"""
         invalid_config = {
             'gmail': {
                 'user': 'test@gmail.com',
-                'auth': {'method': 'app_password'}  # Missing app_password
+                'auth': {'method': 'app_password'}  # Deprecated method
             },
             'lmstudio': {'base_url': 'http://localhost:1234'}
         }
         
-        config_file = temp_dir / 'missing_password_config.yaml'
+        config_file = temp_dir / 'invalid_auth_config.yaml'
         with open(config_file, 'w') as f:
             yaml.safe_dump(invalid_config, f)
         
-        with pytest.raises(ConfigError, match="App password required"):
+        with pytest.raises(ConfigError, match="Must be 'oauth2'"):
             Config(str(config_file))
 
     @pytest.mark.unit
-    def test_config_validation_oauth2_missing_fields(self, temp_dir):
-        """Test that OAuth2 method without required fields fails validation"""
-        invalid_config = {
+    def test_config_validation_oauth2_minimal_config(self, temp_dir):
+        """Test that OAuth2 method works with minimal config (interactive setup handles the rest)"""
+        minimal_config = {
             'gmail': {
                 'user': 'test@gmail.com',
                 'auth': {
                     'method': 'oauth2',
-                    'oauth2': {'client_id': 'test'}  # Missing client_secret and refresh_token
+                    'oauth2': {}  # Empty OAuth2 config is OK - interactive setup will handle it
                 }
             },
             'lmstudio': {'base_url': 'http://localhost:1234'}
         }
         
-        config_file = temp_dir / 'incomplete_oauth_config.yaml'
+        config_file = temp_dir / 'minimal_oauth_config.yaml'
         with open(config_file, 'w') as f:
-            yaml.safe_dump(invalid_config, f)
+            yaml.safe_dump(minimal_config, f)
         
-        with pytest.raises(ConfigError, match="OAuth2 field required"):
-            Config(str(config_file))
+        # Should not raise - OAuth2 fields are optional
+        config = Config(str(config_file))
+        assert config.get_nested('gmail', 'auth', 'method') == 'oauth2'
 
     @pytest.mark.unit
     def test_env_variable_override(self, sample_config_file):

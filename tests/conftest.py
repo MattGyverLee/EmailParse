@@ -29,8 +29,12 @@ def sample_config_data():
             'use_ssl': True,
             'user': 'test@gmail.com',
             'auth': {
-                'method': 'app_password',
-                'app_password': 'test-app-password-16'
+                'method': 'oauth2',
+                'oauth2': {
+                    'client_id': 'test-client-id.apps.googleusercontent.com',
+                    'client_secret': 'test-client-secret',
+                    'token_file': 'test_tokens.json'
+                }
             },
             'processing': {
                 'batch_size': 10,

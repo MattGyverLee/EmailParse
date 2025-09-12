@@ -159,16 +159,11 @@ class Config:
         
         # Validate auth method
         auth_method = self.get_nested('gmail', 'auth', 'method')
-        if auth_method == 'app_password':
-            if not self.get_nested('gmail', 'auth', 'app_password'):
-                errors.append("App password required when using app_password auth method")
-        elif auth_method == 'oauth2':
-            oauth_fields = ['client_id', 'client_secret', 'refresh_token']
-            for field in oauth_fields:
-                if not self.get_nested('gmail', 'auth', 'oauth2', field):
-                    errors.append(f"OAuth2 field required: gmail.auth.oauth2.{field}")
-        else:
-            errors.append(f"Invalid auth method: {auth_method}. Must be 'app_password' or 'oauth2'")
+        if auth_method != 'oauth2':
+            errors.append(f"Invalid auth method: {auth_method}. Must be 'oauth2' (Google deprecated app passwords)")
+        
+        # OAuth2 fields are optional - the interactive setup will handle them
+        # We just need the method to be oauth2
         
         if errors:
             raise ConfigError("Configuration validation failed:\n" + "\n".join(f"  - {err}" for err in errors))

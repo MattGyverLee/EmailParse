@@ -58,3 +58,4 @@ htmlcov/
 
 # LM Studio
 lmstudio/
+gmail_tokens.json
