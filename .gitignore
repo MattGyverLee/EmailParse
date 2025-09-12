@@ -1,0 +1,60 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+config/config_v1.yaml
+logs/*.log
+*.jsonl
+processed_log.jsonl
+staged_actions.jsonl
+
+# Sensitive files
+.env
+*.key
+*.pem
+token_*.json
+*_token.json
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# LM Studio
+lmstudio/
