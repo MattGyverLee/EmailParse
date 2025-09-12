@@ -1,0 +1,65 @@
+# EmailParse V1.0 Configuration Template
+# Copy this file to config_v1.yaml and fill in your details
+
+# Gmail IMAP Configuration
+gmail:
+  host: "imap.gmail.com"
+  port: 993
+  use_ssl: true
+  
+  # Account details
+  user: "your-email@gmail.com"  # Your Gmail address
+  
+  # Authentication (choose one method)
+  auth:
+    method: "app_password"  # Options: "app_password" or "oauth2"
+    
+    # For app_password method (simpler):
+    app_password: "your-16-char-app-password"  # Generate in Google Account settings
+    
+    # For oauth2 method (more secure):
+    # oauth2:
+    #   client_id: "your-client-id.apps.googleusercontent.com"
+    #   client_secret: "your-client-secret"
+    #   refresh_token: "your-refresh-token"
+
+  # Email processing settings
+  processing:
+    batch_size: 10  # Number of emails to fetch at once
+    mailbox: "INBOX"  # Mailbox to process
+    junk_folder: "Junk-Candidate"  # Folder for emails marked as junk
+    processed_folder: "EmailParse-Processed"  # Optional: folder for processed emails
+
+# LM Studio Configuration
+lmstudio:
+  # API endpoint (default LM Studio local server)
+  base_url: "http://localhost:1234"
+  
+  # API settings
+  api_key: ""  # Usually not needed for local LM Studio
+  timeout: 30  # Request timeout in seconds
+  
+  # Model parameters
+  model:
+    name: "mistral"  # Model name in LM Studio
+    temperature: 0.3  # Lower = more consistent, Higher = more creative
+    max_tokens: 500  # Maximum response length
+
+# Application Settings
+app:
+  # Logging
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_file: "logs/emailparse.log"
+  
+  # Processing
+  resume_from_last: true  # Resume from last processed email
+  confirm_before_action: true  # Ask before moving/tagging emails
+  
+  # Display
+  email_preview_length: 500  # Characters to show in email preview
+  show_progress: true  # Show progress indicators
+
+# Environment Variables Override
+# Any setting can be overridden with environment variables using the format:
+# EMAILPARSE_SECTION_SUBSECTION_KEY
+# Example: EMAILPARSE_GMAIL_USER=myemail@gmail.com
