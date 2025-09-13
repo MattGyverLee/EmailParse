@@ -88,11 +88,12 @@ def main():
         # Create individual exports
         for i, email in enumerate(emails, 1):
             filename = f"email_{i}_{email.get('uid', 'unknown')[:10]}"
-            individual_file = exporter.export_email(email, filename)
+            individual_file = exporter.export_single_email(email, filename)
             print(f"[INDIVIDUAL] Email {i}: {individual_file}")
         
         # Create index
-        index_file = exporter.create_index_file(emails, "Gmail API Export")
+        batch_files = [batch_file] 
+        index_file = exporter.create_index_file(batch_files)
         print(f"[INDEX] Email index: {index_file}")
         
         print(f"\\n{'='*60}")
