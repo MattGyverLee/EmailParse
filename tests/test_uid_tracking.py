@@ -10,15 +10,27 @@ import json
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from email_processor_v1 import EmailProcessor
-from email_analyzer import EmailAnalysisResult
+from core.email_analyzer import EmailAnalysisResult
 
 def create_test_config():
     """Create a test configuration"""
     return {
         'gmail': {
+            'host': 'imap.gmail.com',
+            'port': 993,
+            'use_ssl': True,
+            'user': 'test@gmail.com',
+            'auth': {
+                'method': 'oauth2',
+                'oauth2': {
+                    'client_id': 'test-client-id.apps.googleusercontent.com',
+                    'client_secret': 'test-client-secret',
+                    'token_file': 'test_tokens.json'
+                }
+            },
             'processing': {
                 'batch_size': 5,
                 'junk_folder': 'Junk-Candidate'

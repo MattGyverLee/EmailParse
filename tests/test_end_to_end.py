@@ -11,10 +11,10 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from email_processor_v1 import EmailProcessor
-from email_analyzer import EmailAnalysisResult
+from core.email_analyzer import EmailAnalysisResult
 
 def create_test_config():
     """Create a test configuration"""
@@ -64,18 +64,18 @@ def test_processor_initialization():
     
     try:
         processor = EmailProcessor(config_path)
-        print("✓ Processor initialization successful")
+        print("+ Processor initialization successful")
         
         # Test components are initialized
         assert processor.gmail_client is not None
         assert processor.analyzer is not None
         assert processor.cli is not None
-        print("✓ All components initialized")
+        print("+ All components initialized")
         
         return True
         
     except Exception as e:
-        print(f"✗ Processor initialization failed: {e}")
+        print(f"- Processor initialization failed: {e}")
         return False
     finally:
         # Clean up
@@ -98,7 +98,7 @@ def test_email_fetching():
         emails = processor.fetch_unprocessed_emails(limit=3)
         
         assert len(emails) > 0, "Should fetch at least one email"
-        print(f"✓ Fetched {len(emails)} emails")
+        print(f"+ Fetched {len(emails)} emails")
         
         # Validate email format
         for email in emails:
@@ -106,12 +106,12 @@ def test_email_fetching():
             assert 'subject' in email
             assert 'from' in email
             assert 'markdown' in email
-            print(f"✓ Email {email['id']} has correct format")
+            print(f"+ Email {email['id']} has correct format")
         
         return True
         
     except Exception as e:
-        print(f"✗ Email fetching failed: {e}")
+        print(f"- Email fetching failed: {e}")
         return False
     finally:
         os.unlink(config_path)
@@ -132,7 +132,7 @@ def test_email_analysis():
         # Get a test email
         emails = processor.fetch_unprocessed_emails(limit=1)
         if not emails:
-            print("✗ No emails available for analysis")
+            print("- No emails available for analysis")
             return False
         
         test_email = emails[0]
@@ -141,7 +141,7 @@ def test_email_analysis():
         analysis = processor.analyzer.analyze_email(test_email)
         
         if analysis:
-            print(f"✓ Email analysis successful")
+            print(f"+ Email analysis successful")
             print(f"  Recommendation: {analysis.recommendation}")
             print(f"  Confidence: {analysis.confidence:.2f}")
             print(f"  Category: {analysis.category}")
@@ -150,15 +150,15 @@ def test_email_analysis():
             assert analysis.recommendation in ['KEEP', 'JUNK-CANDIDATE']
             assert 0.0 <= analysis.confidence <= 1.0
             assert analysis.reasoning is not None
-            print("✓ Analysis result validation passed")
+            print("+ Analysis result validation passed")
             
             return True
         else:
-            print("✗ Email analysis returned None")
+            print("- Email analysis returned None")
             return False
         
     except Exception as e:
-        print(f"✗ Email analysis failed: {e}")
+        print(f"- Email analysis failed: {e}")
         return False
     finally:
         os.unlink(config_path)
@@ -190,23 +190,23 @@ def test_state_management():
         
         # Log a processed email
         processor.log_processed_email(test_email_id, "delete", test_analysis)
-        print("✓ Email logged to state")
+        print("+ Email logged to state")
         
         # Check if email is in processed set
         assert test_email_id in processor.processed_emails
-        print("✓ Email added to processed set")
+        print("+ Email added to processed set")
         
         # Create new processor instance (simulate restart)
         processor2 = EmailProcessor(config_path)
         
         # Check if state was restored
         assert test_email_id in processor2.processed_emails
-        print("✓ State restored after restart")
+        print("+ State restored after restart")
         
         return True
         
     except Exception as e:
-        print(f"✗ State management test failed: {e}")
+        print(f"- State management test failed: {e}")
         return False
     finally:
         os.unlink(config_path)
@@ -238,30 +238,30 @@ def test_undo_functionality():
         
         # Execute a delete action
         processor.execute_decision(test_email, "delete")
-        print("✓ Delete action executed")
+        print("+ Delete action executed")
         
         # Check that action was recorded
         recent_actions = processor.get_recent_actions()
         assert len(recent_actions) > 0
         assert recent_actions[-1]['email_id'] == 'test_undo_email_001'
         assert recent_actions[-1]['decision'] == 'delete'
-        print("✓ Action recorded for undo")
+        print("+ Action recorded for undo")
         
         # Test undo
         undo_success = processor.undo_last_action()
         assert undo_success, "Undo should succeed"
-        print("✓ Undo action successful")
+        print("+ Undo action successful")
         
         # Check that action was removed
         recent_actions_after = processor.get_recent_actions()
         if recent_actions_after:
             assert recent_actions_after[-1]['email_id'] != 'test_undo_email_001'
-        print("✓ Action removed from history")
+        print("+ Action removed from history")
         
         return True
         
     except Exception as e:
-        print(f"✗ Undo functionality test failed: {e}")
+        print(f"- Undo functionality test failed: {e}")
         return False
     finally:
         os.unlink(config_path)
@@ -285,19 +285,19 @@ def test_error_recovery():
         try:
             # This should not crash the processor
             result = processor.process_single_email(invalid_email)
-            print("✓ Processor handled invalid email gracefully")
+            print("+ Processor handled invalid email gracefully")
         except Exception as e:
-            print(f"✗ Processor crashed on invalid email: {e}")
+            print(f"- Processor crashed on invalid email: {e}")
             return False
         
         # Test system validation
         issues = processor.validate_setup()
-        print(f"✓ System validation completed (found {len(issues)} issues)")
+        print(f"+ System validation completed (found {len(issues)} issues)")
         
         return True
         
     except Exception as e:
-        print(f"✗ Error recovery test failed: {e}")
+        print(f"- Error recovery test failed: {e}")
         return False
     finally:
         os.unlink(config_path)
@@ -339,12 +339,12 @@ def run_all_tests():
     print(f"Success Rate: {passed/total*100:.1f}%")
     
     if passed == total:
-        print("\\n🎉 All tests passed! Phase 5 is complete and ready for production.")
+        print("\\nAll tests passed! Phase 5 is complete and ready for production.")
         print("\\nNext steps:")
         print("1. Run: python email_processor_v1.py --validate")
         print("2. Run: python email_processor_v1.py --max-emails 5")
     else:
-        print(f"\\n⚠️ {total-passed} tests failed. Please review and fix issues.")
+        print(f"\\nWarning: {total-passed} tests failed. Please review and fix issues.")
     
     return passed == total
 

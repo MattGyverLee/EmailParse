@@ -5,8 +5,8 @@ from unittest.mock import Mock, MagicMock, patch
 import imaplib
 from datetime import datetime, timezone
 
-from emailparse.gmail_client import GmailClient, GmailError
-from emailparse.config import Config
+from clients.gmail_client import GmailClient, GmailError
+from utils.config import Config
 
 class TestGmailClient:
     """Test Gmail IMAP client functionality"""
@@ -22,7 +22,7 @@ class TestGmailClient:
         assert client.current_mailbox is None
     
     @pytest.mark.unit
-    @patch('emailparse.gmail_client.imaplib.IMAP4_SSL')
+    @patch('clients.gmail_client.imaplib.IMAP4_SSL')
     def test_connect_success(self, mock_imap_ssl, mock_config):
         """Test successful Gmail connection"""
         mock_conn = MagicMock()
@@ -37,7 +37,7 @@ class TestGmailClient:
         mock_imap_ssl.assert_called_once()
     
     @pytest.mark.unit
-    @patch('emailparse.gmail_client.imaplib.IMAP4_SSL')
+    @patch('clients.gmail_client.imaplib.IMAP4_SSL')
     def test_connect_failure_with_retries(self, mock_imap_ssl, mock_config):
         """Test connection failure with retries"""
         mock_imap_ssl.side_effect = Exception("Connection failed")
@@ -59,7 +59,7 @@ class TestGmailClient:
         client.is_connected = True
         
         # Mock OAuth2 to raise an error (simulating setup failure)
-        with patch('emailparse.gmail_oauth.GmailOAuth') as mock_oauth_class:
+        with patch('clients.gmail_oauth.GmailOAuth') as mock_oauth_class:
             mock_oauth = mock_oauth_class.return_value
             mock_oauth.authenticate.side_effect = Exception("OAuth2 setup required")
             
@@ -342,7 +342,7 @@ class TestGmailClient:
     @pytest.mark.unit
     def test_oauth2_string_creation(self, mock_config):
         """Test OAuth2 authentication string creation via GmailOAuth"""
-        from emailparse.gmail_oauth import GmailOAuth
+        from clients.gmail_oauth import GmailOAuth
         import time
         
         oauth = GmailOAuth()
@@ -432,8 +432,8 @@ class TestGmailClientIntegration:
             ])
         ]
         
-        with patch('emailparse.gmail_client.imaplib.IMAP4_SSL', return_value=mock_conn), \
-             patch('emailparse.gmail_oauth.GmailOAuth') as mock_oauth_class:
+        with patch('clients.gmail_client.imaplib.IMAP4_SSL', return_value=mock_conn), \
+             patch('clients.gmail_oauth.GmailOAuth') as mock_oauth_class:
             
             # Mock OAuth2 authentication
             mock_oauth = mock_oauth_class.return_value

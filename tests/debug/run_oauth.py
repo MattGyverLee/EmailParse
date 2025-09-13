@@ -23,8 +23,8 @@ def main():
     print(f"[INFO] Using authorization code: {auth_code[:20]}...")
     
     try:
-        from emailparse.config import Config
-        from emailparse.gmail_oauth import GmailOAuth
+        from utils.config import Config
+        from clients.gmail_oauth import GmailOAuth
         
         # Load config
         config = Config("config/config_v1.yaml")
@@ -52,8 +52,8 @@ def main():
         # Now fetch emails
         print(f"\n[GMAIL] Connecting to Gmail and fetching emails...")
         
-        from emailparse.gmail_client import GmailClient
-        from emailparse.markdown_exporter import MarkdownExporter
+        from clients.gmail_client import GmailClient
+        from utils.markdown_exporter import MarkdownExporter
         
         # Create Gmail client
         client = GmailClient(config)

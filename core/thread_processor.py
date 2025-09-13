@@ -8,8 +8,8 @@ from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict
 from datetime import datetime
 
-from thread_analyzer import ThreadAnalyzer, ThreadMessage, ThreadAnalysisResult
-from email_analyzer import EmailAnalysisResult
+from .thread_analyzer import ThreadAnalyzer, ThreadMessage, ThreadAnalysisResult
+from .email_analyzer import EmailAnalysisResult
 
 class ThreadProcessor:
     """Processes emails in thread context"""

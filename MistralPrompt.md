@@ -30,6 +30,7 @@ Analyze the provided email markdown and classify it into one of two categories:
 - Marketing emails with unsubscribe links you never use
 - Cold sales outreach emails
 - Affiliate marketing emails
+- **Newsletter Age Policy**: Newsletters older than 1 month from ANY sender (except matthew_lee@wycliffe.org) can be marked for deletion, as newsletter content becomes outdated and loses relevance
 
 #### 3. **Social Media & Platform Notifications**
 - Social media activity notifications (likes, follows, comments)
@@ -62,6 +63,18 @@ Analyze the provided email markdown and classify it into one of two categories:
 - Delivery confirmations for packages received months ago
 - Booking confirmations for completed travel/events
 
+#### 7. **Transaction Receipts (After 3+ Days)**
+- PayPal transaction receipts after ~3 days (can be retrieved from PayPal app)
+- Amazon purchase receipts after ~3 days (accessible in Amazon account)
+- Apple/Google Play Store receipts after ~3 days (available in respective app stores)
+- Banking/credit card transaction notifications after ~3 days (available in banking apps)
+- Food delivery receipts (DoorDash, Uber Eats) after ~3 days
+- Ride-sharing receipts (Uber, Lyft) after ~3 days
+- Streaming service payment confirmations after ~3 days
+- Utility payment confirmations after ~3 days
+
+**Note**: These receipts can be retrieved from vendor apps/accounts when needed. After transactions clear (~3 days), email copies are redundant.
+
 ### KEEP Categories:
 
 #### 1. **Important Personal/Professional**
@@ -80,11 +93,15 @@ Analyze the provided email markdown and classify it into one of two categories:
 - Billing statements for active services
 - Important product updates for software you use
 
-#### 3. **Reference Materials**
-- Receipts for major purchases or warranty items
+#### 3. **Reference Materials & Important Receipts**
+- Receipts for major purchases (>$100) or warranty items
 - Travel confirmations for future trips
 - Important confirmations or reference numbers you might need
 - Documentation for returns/exchanges still in progress
+- Transaction receipts less than 3 days old (still clearing)
+- Receipts for tax-deductible business expenses
+- Insurance claim receipts and medical expense receipts
+- Receipts for items under warranty or potential return
 
 #### 4. **Actionable Items**
 - Emails requiring a response
@@ -115,6 +132,12 @@ Respond in this exact JSON format:
   - Important personal correspondence
   - Reference materials still needed
   - Software license codes
+- Newsletters older than 1 month are JUNK-CANDIDATE unless:
+  - From matthew_lee@wycliffe.org (always keep regardless of age)
+- Transaction receipts older than 3 days are JUNK-CANDIDATE unless:
+  - Major purchases (>$100) needing warranty/return reference
+  - Tax-deductible business expenses
+  - Medical or insurance claims in progress
 
 ### Sender Reputation
 - Known legitimate companies: Evaluate content, not just sender
@@ -143,6 +166,17 @@ The email will be provided in markdown format with headers and body content. Ana
 ---
 
 ## Prompt Improvement Log
+
+### Version 3 - 2025-09-13 14:47:00
+
+**User Feedback:** If a newsletter (from anyone other than matthew_lee@wycliffe.org) is more than a month old. It can be marked for deletion.
+
+**Update Applied:**
+- Added newsletter age policy to Commercial/Marketing section
+- Updated Age-Based Evaluation with specific rule: "Newsletters older than 1 month are JUNK-CANDIDATE unless from matthew_lee@wycliffe.org (always keep regardless of age)"
+- This allows the AI to delete outdated newsletters while preserving important newsletters from matthew_lee@wycliffe.org
+
+---
 
 ### Version 2 - 2025-09-12 22:58:37
 

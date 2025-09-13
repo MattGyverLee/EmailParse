@@ -4,8 +4,8 @@ import pytest
 import os
 from pathlib import Path
 
-from emailparse.config import Config
-from emailparse.gmail_client import GmailClient, GmailError
+from utils.config import Config
+from clients.gmail_client import GmailClient, GmailError
 from emailparse.email_processor_v1 import EmailProcessor
 
 class TestGmailIntegration:

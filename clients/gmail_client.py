@@ -10,7 +10,7 @@ import time
 import base64
 from datetime import datetime, timezone
 
-from .config import Config
+from utils.config import Config
 
 logger = logging.getLogger(__name__)
 

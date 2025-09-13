@@ -95,6 +95,18 @@ class MarkdownExporter:
             logger.error(f"Failed to write markdown file {filepath}: {e}")
             raise
     
+    def get_email_markdown(self, email_data: Dict[str, Any]) -> str:
+        """
+        Generate markdown content for a single email without writing to file
+        
+        Args:
+            email_data: Email dictionary
+            
+        Returns:
+            Markdown content string
+        """
+        return self._generate_single_email_markdown(email_data)
+    
     def _generate_batch_markdown(self, emails: List[Dict[str, Any]], batch_name: str) -> str:
         """
         Generate markdown content for a batch of emails

@@ -10,11 +10,11 @@ from pathlib import Path
 from datetime import datetime
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from thread_processor import ThreadProcessor, ThreadMessage
-from thread_analyzer import ThreadAnalyzer
-from email_analyzer import EmailAnalyzer
+from core.thread_processor import ThreadProcessor, ThreadMessage
+from core.thread_analyzer import ThreadAnalyzer
+from core.email_analyzer import EmailAnalyzer
 
 def create_test_config():
     """Create test configuration"""

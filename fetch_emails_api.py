@@ -14,9 +14,9 @@ def main():
     print("[EMAILPARSE] Starting email processing with Gmail API...")
     
     try:
-        from emailparse.config import Config
-        from emailparse.gmail_api_client import GmailAPIClient
-        from emailparse.markdown_exporter import MarkdownExporter
+        from utils.config import Config
+        from clients.gmail_api_client import GmailAPIClient
+        from utils.markdown_exporter import MarkdownExporter
         
         # Load config
         config = Config("config/config_v1.yaml")

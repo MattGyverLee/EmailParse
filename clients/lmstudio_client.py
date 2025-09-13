@@ -12,14 +12,27 @@ from pathlib import Path
 class LMStudioClient:
     """Client for communicating with LM Studio API"""
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config):
         """Initialize LM Studio client with configuration"""
-        self.base_url = config.get('lmstudio', {}).get('base_url', 'http://localhost:1234')
-        self.api_key = config.get('lmstudio', {}).get('api_key', '')
-        self.timeout = config.get('lmstudio', {}).get('timeout', 30)
+        # Handle both Config objects and dict
+        if hasattr(config, 'get_lmstudio_config'):
+            # Config object with methods
+            lm_config = config.get_lmstudio_config()
+            self.base_url = lm_config.get('base_url', 'http://localhost:1234')
+            self.api_key = lm_config.get('api_key', '')
+            self.timeout = lm_config.get('timeout', 30)
+            
+            # Model parameters
+            model_config = lm_config.get('model', {})
+        else:
+            # Dict config (legacy)
+            self.base_url = config.get('lmstudio', {}).get('base_url', 'http://localhost:1234')
+            self.api_key = config.get('lmstudio', {}).get('api_key', '')
+            self.timeout = config.get('lmstudio', {}).get('timeout', 30)
+            
+            # Model parameters
+            model_config = config.get('lmstudio', {}).get('model', {})
         
-        # Model parameters
-        model_config = config.get('lmstudio', {}).get('model', {})
         self.model_name = model_config.get('name', 'mistral')
         self.temperature = model_config.get('temperature', 0.3)
         self.max_tokens = model_config.get('max_tokens', 500)
@@ -72,6 +85,13 @@ class LMStudioClient:
             Dict containing analysis results or None if failed
         """
         try:
+            # Truncate email content to fit in context window
+            # Estimate: ~4 chars per token, leave room for prompt (~2000 tokens)
+            max_email_chars = 4000  # ~1000 tokens for email content
+            if len(email_markdown) > max_email_chars:
+                email_markdown = email_markdown[:max_email_chars] + "\n\n[... content truncated for analysis ...]"
+                self.logger.warning(f"Truncated email content to {max_email_chars} chars to fit context window")
+            
             # Construct the full prompt
             full_prompt = f"{prompt_template}\n\n## Email to Analyze:\n\n{email_markdown}"
             
@@ -93,7 +113,8 @@ class LMStudioClient:
                 "stream": False
             }
             
-            self.logger.debug(f"Sending request to LM Studio: {payload}")
+            self.logger.info(f"Sending request to LM Studio with model: {self.model_name}")
+            self.logger.debug(f"Full payload: {payload}")
             
             # Make the API request
             response = requests.post(
@@ -103,6 +124,8 @@ class LMStudioClient:
                 timeout=self.timeout
             )
             
+            if response.status_code != 200:
+                self.logger.error(f"LM Studio API error {response.status_code}: {response.text}")
             response.raise_for_status()
             result = response.json()
             
@@ -110,13 +133,26 @@ class LMStudioClient:
             if 'choices' in result and len(result['choices']) > 0:
                 content = result['choices'][0]['message']['content']
                 
+                # Check for empty response
+                if not content or content.strip() == "":
+                    self.logger.error("Received empty response from LM Studio")
+                    return None
+                
+                self.logger.debug(f"Raw LM Studio response: {content[:200]}...")
+                
                 # Try to parse JSON response
                 try:
                     # Clean up the response (remove markdown code blocks if present)
+                    original_content = content
                     if '```json' in content:
                         content = content.split('```json')[1].split('```')[0].strip()
                     elif '```' in content:
                         content = content.split('```')[1].split('```')[0].strip()
+                    
+                    # If content is still empty after cleaning
+                    if not content.strip():
+                        self.logger.error(f"Content became empty after cleaning. Original: {original_content[:200]}...")
+                        return None
                     
                     analysis_result = json.loads(content)
                     
@@ -129,8 +165,21 @@ class LMStudioClient:
                         return None
                         
                 except json.JSONDecodeError as e:
-                    self.logger.error(f"Failed to parse JSON response: {content}")
+                    self.logger.error(f"Failed to parse JSON response: {content[:500]}...")
                     self.logger.error(f"JSON error: {e}")
+                    
+                    # Try to create a basic analysis from the text content if possible
+                    if "KEEP" in content.upper() or "DELETE" in content.upper():
+                        self.logger.warning("Attempting to extract basic recommendation from malformed response")
+                        recommendation = "KEEP" if "KEEP" in content.upper() else "DELETE"
+                        return {
+                            "recommendation": recommendation,
+                            "category": "Parsing Error",
+                            "confidence": 0.3,
+                            "reasoning": f"Response parsing failed, extracted: {recommendation}",
+                            "key_factors": ["JSON parsing error"]
+                        }
+                    
                     return None
             else:
                 self.logger.error(f"Unexpected API response format: {result}")

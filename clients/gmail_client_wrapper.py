@@ -9,17 +9,14 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-# Add src to path to import the existing Gmail client
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root / 'src'))
-
 try:
-    from emailparse.config import Config
-    from emailparse.gmail_api_client import GmailAPIClient
-    from emailparse.markdown_exporter import MarkdownExporter
+    from utils.config import Config
+    from .gmail_api_client import GmailAPIClient
+    from utils.markdown_exporter import MarkdownExporter
 except ImportError as e:
     print(f"Warning: Could not import Gmail modules: {e}")
     # Fallback for testing
+    Config = None
     GmailAPIClient = None
     MarkdownExporter = None
 
@@ -92,7 +89,13 @@ class GmailClientWrapper:
             
             # Fetch emails using the existing client
             self.logger.info(f"Fetching {limit} emails from Gmail")
-            emails = self.client.fetch_emails(limit=limit)
+            
+            # First search for message IDs - include both inbox and archived emails
+            # Exclude sent, trash, spam, and drafts - focus on received emails only
+            message_ids = self.client.search_emails(query="-in:sent -in:trash -in:spam -in:drafts", limit=limit)
+            
+            # Then fetch the actual emails
+            emails = self.client.fetch_emails(message_ids)
             
             # Convert to standardized format
             processed_emails = []
@@ -121,7 +124,10 @@ class GmailClientWrapper:
                 self.authenticated = True
             
             result = self.client.add_label(email_id, label_name)
-            self.logger.info(f"Added label '{label_name}' to email {email_id}")
+            if result:
+                self.logger.info(f"Added label '{label_name}' to email {email_id}")
+            else:
+                self.logger.error(f"Gmail API reported failure adding label '{label_name}' to email {email_id}")
             return result
             
         except Exception as e:
@@ -140,7 +146,10 @@ class GmailClientWrapper:
                 self.authenticated = True
             
             result = self.client.remove_label(email_id, label_name)
-            self.logger.info(f"Removed label '{label_name}' from email {email_id}")
+            if result:
+                self.logger.info(f"Removed label '{label_name}' from email {email_id}")
+            else:
+                self.logger.error(f"Gmail API reported failure removing label '{label_name}' from email {email_id}")
             return result
             
         except Exception as e:
@@ -154,34 +163,37 @@ class GmailClientWrapper:
                 return None
             
             # Extract basic fields
-            email_id = email_data.get('id', 'unknown')
+            email_id = email_data.get('id') or email_data.get('uid', 'unknown')
             subject = email_data.get('subject', 'No Subject')
             sender = email_data.get('from', 'Unknown Sender')
             date = email_data.get('date', 'Unknown Date')
             
-            # Get body content
+            # Get body content and clean it
             body = email_data.get('body', '')
             text_content = email_data.get('text_content', body)
+            
+            # Clean HTML content for better display and LLM analysis
+            clean_content = self._clean_html_content(text_content)
             
             # Generate markdown if exporter available
             markdown = None
             if self.exporter and email_data:
                 try:
-                    markdown = self.exporter.export_email(email_data)
+                    markdown = self.exporter.get_email_markdown(email_data)
                 except Exception as e:
                     self.logger.warning(f"Failed to generate markdown for email {email_id}: {e}")
             
             # Fallback markdown generation
             if not markdown:
-                markdown = self._generate_simple_markdown(subject, sender, date, text_content)
+                markdown = self._generate_simple_markdown(subject, sender, date, clean_content)
             
             return {
                 'id': email_id,
                 'subject': subject,
                 'from': sender,
                 'date': str(date),
-                'body': text_content,
-                'text_content': text_content,
+                'body': clean_content,
+                'text_content': clean_content,
                 'markdown': markdown,
                 'raw_data': email_data
             }
@@ -192,6 +204,7 @@ class GmailClientWrapper:
     
     def _generate_simple_markdown(self, subject: str, sender: str, date: str, content: str) -> str:
         """Generate simple markdown representation of email"""
+        # Content is already cleaned at this point
         markdown = f"""# {subject}
 
 **From:** {sender}  
@@ -203,6 +216,43 @@ class GmailClientWrapper:
 """
         return markdown
     
+    def _clean_html_content(self, content: str) -> str:
+        """Clean HTML content for better LLM analysis"""
+        import re
+        
+        if not content:
+            return ""
+        
+        # Remove common HTML tags but preserve text
+        content = re.sub(r'<style[^>]*>.*?</style>', '', content, flags=re.DOTALL | re.IGNORECASE)
+        content = re.sub(r'<script[^>]*>.*?</script>', '', content, flags=re.DOTALL | re.IGNORECASE)
+        content = re.sub(r'<head[^>]*>.*?</head>', '', content, flags=re.DOTALL | re.IGNORECASE)
+        
+        # Remove font-face, @import, and CSS rules
+        content = re.sub(r'@font-face\s*\{[^}]*\}', '', content, flags=re.DOTALL)
+        content = re.sub(r'@import\s+[^;]+;?', '', content)
+        content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
+        
+        # Remove CSS selector blocks (e.g., "td, th, div { ... }")
+        content = re.sub(r'[a-zA-Z0-9\s,#.:\-_>]+\s*\{[^}]*\}', '', content, flags=re.DOTALL)
+        
+        # Remove standalone CSS properties (e.g., "font-family: 'Segoe UI', sans-serif;")
+        content = re.sub(r'[a-zA-Z-]+\s*:\s*[^;]+;', '', content)
+        
+        # Remove HTML tags
+        content = re.sub(r'<[^>]+>', ' ', content)
+        
+        # Clean up excessive whitespace
+        content = re.sub(r'\n\s*\n\s*\n', '\n\n', content)  # Max 2 consecutive newlines
+        content = re.sub(r'[ \t]+', ' ', content)  # Multiple spaces to single space
+        content = content.strip()
+        
+        # Limit length for LLM context
+        if len(content) > 3000:  # Leave room for subject/sender
+            content = content[:3000] + "\n\n[... content truncated for analysis ...]"
+        
+        return content
+    
     def _create_mock_emails(self, count: int, include_threads: bool = True) -> List[Dict[str, Any]]:
         """Create mock emails for testing when Gmail client not available"""
         mock_emails = []
@@ -211,7 +261,7 @@ class GmailClientWrapper:
             {
                 'subject': 'Flash Sale - 50% Off Everything!',
                 'from': 'deals@retailstore.com',
-                'content': '''🔥 **FLASH SALE ALERT!** 🔥
+                'content': '''**FLASH SALE ALERT!**
 
 Get 50% off EVERYTHING in our store! This incredible deal won't last long.
 

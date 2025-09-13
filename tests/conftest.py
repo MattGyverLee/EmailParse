@@ -7,11 +7,11 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock
 import yaml
 
-# Add src to Python path for testing
+# Add project root to Python path for testing
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from emailparse.config import Config
+from utils.config import Config
 
 @pytest.fixture
 def temp_dir():

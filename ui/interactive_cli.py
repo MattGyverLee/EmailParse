@@ -18,17 +18,17 @@ from rich.progress import Progress
 from rich.syntax import Syntax
 from datetime import datetime
 
-from email_analyzer import EmailAnalyzer, EmailAnalysisResult
+from core.email_analyzer import EmailAnalyzer, EmailAnalysisResult
 
 class InteractiveCLI:
     """Interactive command-line interface for email processing"""
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config):
         """
         Initialize interactive CLI
         
         Args:
-            config: Configuration dictionary
+            config: Configuration object or dictionary
         """
         self.config = config
         self.console = Console()
@@ -37,9 +37,16 @@ class InteractiveCLI:
         # Initialize email analyzer
         self.analyzer = EmailAnalyzer(config)
         
-        # CLI settings
-        self.email_preview_length = config.get('app', {}).get('email_preview_length', 500)
-        self.show_progress = config.get('app', {}).get('show_progress', True)
+        # CLI settings - handle both Config objects and dict
+        if hasattr(config, 'get_app_config'):
+            # Config object with methods
+            app_config = config.get_app_config()
+            self.email_preview_length = app_config.get('email_preview_length', 500)
+            self.show_progress = app_config.get('show_progress', True)
+        else:
+            # Dict config (legacy)
+            self.email_preview_length = config.get('app', {}).get('email_preview_length', 500)
+            self.show_progress = config.get('app', {}).get('show_progress', True)
         
         # Session tracking
         self.session_stats = {
@@ -65,14 +72,14 @@ class InteractiveCLI:
         # Check system status
         issues = self.analyzer.validate_system()
         if issues:
-            self.console.print("\n[bold red]⚠️ System Issues Detected:[/bold red]")
+            self.console.print("\n[bold red]System Issues Detected:[/bold red]")
             for issue in issues:
-                self.console.print(f"  • [red]{issue}[/red]")
+                self.console.print(f"  - [red]{issue}[/red]")
             
             if not Confirm.ask("\nContinue anyway?"):
                 return False
         else:
-            self.console.print("\n[bold green]✅ System ready[/bold green]")
+            self.console.print("\n[bold green]System ready[/bold green]")
         
         return True
     
@@ -101,19 +108,19 @@ class InteractiveCLI:
         
         email_panel = Panel(
             header_table,
-            title="📧 Email Details",
+            title="Email Details",
             border_style="cyan"
         )
         self.console.print(email_panel)
         
-        # Email content preview
-        content = email_data.get('body', email_data.get('text_content', 'No content available'))
+        # Email content preview - show same markdown that goes to LLM
+        content = email_data.get('markdown', email_data.get('body', email_data.get('text_content', 'No content available')))
         if len(content) > self.email_preview_length:
             content = content[:self.email_preview_length] + "\\n\\n[...truncated...]"
         
         content_panel = Panel(
             content,
-            title="📄 Email Content (Preview)",
+            title="Email Content (Preview)",
             border_style="dim"
         )
         self.console.print(content_panel)
@@ -143,11 +150,11 @@ class InteractiveCLI:
         analysis_table.add_row("Reasoning:", analysis.reasoning)
         
         if analysis.key_factors:
-            factors = "\\n".join([f"• {factor}" for factor in analysis.key_factors])
+            factors = "\\n".join([f"- {factor}" for factor in analysis.key_factors])
             analysis_table.add_row("Key Factors:", factors)
         
         if analysis.red_flags:
-            flags = "\\n".join([f"⚠️ {flag}" for flag in analysis.red_flags])
+            flags = "\\n".join([f"WARNING: {flag}" for flag in analysis.red_flags])
             analysis_table.add_row("Red Flags:", f"[red]{flags}[/red]")
         
         # Add confidence interpretation
@@ -156,7 +163,7 @@ class InteractiveCLI:
         
         ai_panel = Panel(
             analysis_table,
-            title="🤖 AI Analysis",
+            title="AI Analysis",
             border_style="yellow"
         )
         self.console.print(ai_panel)
@@ -204,15 +211,36 @@ class InteractiveCLI:
             
             if confidence_level == "low":
                 # Low confidence: Always ask for human decision and reasoning
-                self.console.print("[yellow]⚠️ AI has low confidence in this recommendation.[/yellow]")
+                self.console.print("[yellow]WARNING: AI has low confidence in this recommendation.[/yellow]")
                 self.console.print("[dim]Your input is especially valuable here![/dim]\\n")
             elif confidence_level == "high" and self._is_auto_accept_candidate(analysis):
-                # High confidence: Offer auto-accept option
-                self.console.print(f"[green]✓ AI is confident in this recommendation: {analysis.recommendation}[/green]")
+                # High confidence: Offer auto-accept option with note capability
+                action_text = analysis.recommendation.lower()
+                if action_text == "junk-candidate":
+                    action_text = "delete"
                 
-                if Confirm.ask(f"Accept AI recommendation to {analysis.recommendation.lower()}?", default=True):
+                self.console.print(f"[green]AI is confident ({analysis.confidence:.0%}) in this recommendation: {analysis.recommendation}[/green]")
+                
+                quick_options = f"""[bold]Quick decision:[/bold]
+[green]Y[/green] - Yes, accept recommendation
+[yellow]N[/yellow] - Yes, but add a note to improve AI
+[blue]M[/blue] - No, show me all options
+[red]Q[/red] - Quit"""
+                
+                self.console.print(quick_options)
+                
+                choice = Prompt.ask("Your choice", choices=["y", "n", "m", "q"], default="y").lower()
+                
+                if choice == "y":
                     decision = "delete" if analysis.recommendation == "JUNK-CANDIDATE" else "keep"
-                    return decision, None, False  # High confidence + agreement = no prompt update needed
+                    return decision, None, False  # Simple agreement, no prompt update
+                elif choice == "n":
+                    decision = "delete" if analysis.recommendation == "JUNK-CANDIDATE" else "keep"
+                    note = Prompt.ask("[bold]What should the AI learn from this email?[/bold]\\n(e.g., 'Always keep newsletters from trusted companies')")
+                    return decision, note, True  # Agreement with note for prompt improvement
+                elif choice == "q":
+                    return "quit", None, False  # User wants to quit
+                # If choice == "m", fall through to standard options
         
         # Show standard options
         options_text = """
@@ -228,12 +256,16 @@ class InteractiveCLI:
         self.console.print(options_text)
         
         while True:
-            choice = Prompt.ask(
-                "Your decision",
-                choices=["k", "d", "s", "u", "q", "?", "help"],
-                default="k",
-                show_choices=False
-            ).lower()
+            try:
+                choice = Prompt.ask(
+                    "Your decision",
+                    choices=["k", "d", "s", "u", "q", "?", "help"],
+                    default="k",
+                    show_choices=False
+                ).lower()
+            except (EOFError, KeyboardInterrupt):
+                self.console.print("\n[yellow]Session interrupted. Defaulting to keep email for safety.[/yellow]")
+                choice = "k"
             
             if choice in ["?", "help"]:
                 self.show_help()
@@ -310,6 +342,7 @@ class InteractiveCLI:
             analysis.confidence >= 0.85 and
             analysis.category in [
                 "Commercial/Marketing", 
+                "Newsletter Spam",
                 "Time-Sensitive Expired Content",
                 "Social Media & Platform Notifications",
                 "Obvious Spam & Suspicious Content"
@@ -322,25 +355,25 @@ class InteractiveCLI:
 [bold]EmailParse Interactive Help[/bold]
 
 [bold green]Commands:[/bold green]
-• [green]K[/green] - Keep: Mark email as important, leave in current location
-• [red]D[/red] - Delete: Mark email as junk candidate, apply "Junk-Candidate" label
-• [yellow]S[/yellow] - Skip: Skip this email for now, will be processed again later
-• [blue]U[/blue] - Undo: Undo the last action (remove labels, restore state)
-• [blue]Q[/blue] - Quit: Exit the processing session (progress is saved)
+[green]K[/green] - Keep: Mark email as important, leave in current location
+[red]D[/red] - Delete: Mark email as junk candidate, apply "Junk-Candidate" label
+[yellow]S[/yellow] - Skip: Skip this email for now, will be processed again later
+[blue]U[/blue] - Undo: Undo the last action (remove labels, restore state)
+[blue]Q[/blue] - Quit: Exit the processing session (progress is saved)
 
 [bold yellow]AI Learning:[/bold yellow]
 When you disagree with the AI's recommendation, you'll be asked to explain why.
 This feedback helps improve the AI's future classifications by updating the prompt.
 
 [bold blue]Tips:[/bold blue]
-• The AI learns general patterns, not specific email content
-• Focus on explaining the type of content or sender rather than specific details
-• Your feedback helps classify similar emails better in the future
+- The AI learns general patterns, not specific email content
+- Focus on explaining the type of content or sender rather than specific details
+- Your feedback helps classify similar emails better in the future
 
 [bold red]Safety:[/bold red]
-• When in doubt, choose Keep - it's safer to keep an email than delete it
-• You can always manually delete emails later
-• The AI defaults to Keep when uncertain
+- When in doubt, choose Keep - it's safer to keep an email than delete it
+- You can always manually delete emails later
+- The AI defaults to Keep when uncertain
 """
         
         help_panel = Panel(help_text, title="Help", border_style="blue")
@@ -365,7 +398,7 @@ This feedback helps improve the AI's future classifications by updating the prom
         
         stats_panel = Panel(
             stats_table,
-            title="📊 Session Statistics",
+            title="Session Statistics",
             border_style="green"
         )
         self.console.print(stats_panel)
@@ -550,4 +583,4 @@ Final Statistics:
         self.display_session_stats()
         
         self.console.print("\\n[dim]Session saved. You can resume processing anytime.[/dim]")
-        self.console.print("[dim]Goodbye! 👋[/dim]\\n")
+        self.console.print("[dim]Goodbye![/dim]\\n")

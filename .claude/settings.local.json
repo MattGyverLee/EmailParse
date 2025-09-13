@@ -6,7 +6,8 @@
       "Bash(git commit:*)",
       "Bash(source:*)",
       "Bash(python:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

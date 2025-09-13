@@ -1,196 +1,300 @@
-# Email Processing with IMAP and Local LLM - Decision Summary
+# EmailParse - AI-Powered Email Management System
 
-## Overview
-This document summarizes the approach decided for cleaning up email using IMAP access with a local LLM, avoiding direct API access that email providers restrict.
+[![Tests](https://img.shields.io/badge/tests-passing-green)](tests/)
+[![Python](https://img.shields.io/badge/python-3.8+-blue)](https://python.org)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-## Project Phases
+> **Thread-aware email processing with local AI analysis and human-in-the-loop decision making**
 
-### Version 1.0 - Interactive Human-in-the-Loop (Core Implementation)
-**Focus**: Gmail IMAP + Local Mistral + Interactive Processing
-- Single Gmail account IMAP connection
-- Mistral integration via LM Studio local API
-- Human-in-the-loop email processing (one-by-one review)
-- Dynamic LLM prompt updates based on user feedback
-- Email tagging for manual cleanup
-- Processing log to prevent duplicates
+## 🚀 Quick Start
 
-### Version 2.0 - Enhanced Automation (Future)
-**Focus**: Multi-provider + TheBrain Integration + Batch Processing
-- Multi-account support (5 Gmail + 1 Office 365)
-- TheBrain API integration for valuable email collection
-- Automated batch processing modes
-- Advanced classification with multiple LLM strategies
-- Full OAuth2 implementation for all providers
+```bash
+# 1. Set up Gmail access
+python setup_gmail.py
 
-## Core Architecture
+# 2. Start interactive email processing 
+python email_processor_v1.py
 
-### Local IMAP Gateway Approach
-- **LLM ⇄ Local Gateway ⇄ IMAP Server**
-- Gateway exposes limited JSON endpoints (search, fetch, stage-move)
-- LLM never sees credentials or direct IMAP access
-- All operations READ-ONLY by default with human-in-the-loop for mutations
-
-### Multi-Account Support
-- **5 Gmail accounts + 1 Microsoft 365 account**
-- Unified configuration via `config.yaml`
-- Per-account authentication (OAuth2/app passwords)
-- Centralized staging and execution
-
-## Authentication Strategy
-
-### Gmail Accounts
-- **XOAUTH2** (preferred): OAuth2 with minimal Google API usage (token endpoints only)
-- **App Passwords**: Fallback for accounts with 2FA enabled
-- No Gmail API calls - pure IMAP with OAuth authentication
-
-### Microsoft 365
-- **Device Code Flow**: OAuth2 without client secrets
-- IMAP access via `outlook.office365.com`
-- Token refresh handled automatically
-
-## Processing Pipeline
-
-### 1. Classification System
-**Rule-based heuristics:**
-- **Junk patterns**: unsubscribe, promotions, newsletters, spam keywords
-- **Keep signals**: invoices, receipts, confirmations, meeting minutes
-- **Domain reputation**: trusted senders (Amazon, GitHub, Microsoft, etc.)
-
-### 2. Action Staging
-- **Junk**: Move to `Junk-Candidate` folder
-- **Keep**: Flag messages and optionally send to TheBrain
-- **Maybe**: Leave for manual review
-- All actions staged in `staged_actions.jsonl` before execution
-
-### 3. Duplicate Prevention
-- **Processing Log**: Maintain `processed_emails.jsonl` with UID + account tracking
-- **Skip Processed**: Check log before classification to avoid reprocessing
-- **Persistent State**: Log survives between runs and prevents duplicate work
-
-### 4. TheBrain Integration
-- **REST API**: Create thoughts for important emails
-- **Metadata**: Include sender, date, and email summary
-- **Rate limiting**: Configurable max emails per account per run
-
-## Safety Features
-
-### Read-Only Default
-- All IMAP sessions use READ-ONLY mode
-- Mutations require separate human-approved step
-- Staging files allow review before execution
-
-### Network Isolation
-- Gateway runs on localhost only
-- LLM should be firewall-restricted from internet access
-- Only gateway connects to IMAP servers
-
-### Credential Security
-- OAuth tokens stored locally, never in LLM context
-- App passwords isolated in configuration files
-- No credentials exposed to classification logic
-
-## Key Benefits
-
-1. **Provider Compliance**: No API access concerns - uses standard IMAP
-2. **Local Control**: All processing happens locally
-3. **Safety by Design**: Read-only with human confirmation for changes  
-4. **Multi-Account**: Handles multiple email accounts in single pass
-5. **Extensible**: Easy to add new classification rules or actions
-
-## Implementation Files
-
-- `config.yaml`: Multi-account configuration
-- `oauth_gmail.py`: Gmail OAuth token management
-- `oauth_m365.py`: Microsoft 365 device code flow
-- `mail_gateway_multi.py`: Main gateway with classification
-- `staged_actions.jsonl`: Action queue for human review
-- `processed_emails.jsonl`: Log of processed emails to prevent duplicates
-
-## Version 1.0 Implementation Details
-
-### Core Components
-- **IMAP Client**: Single Gmail account connection with app password/OAuth2
-- **LM Studio Integration**: Local Mistral API calls for email analysis
-- **Interactive CLI**: Human-in-the-loop interface for decision making
-- **Prompt Engine**: Dynamic LLM prompt updates based on user feedback
-- **Email Tagger**: IMAP folder/label management for cleanup staging
-- **Processing Logger**: Duplicate prevention and decision tracking
-
-### Human-in-the-Loop Processing
-- **Chunk Processing**: Fetch configurable batch of emails (default: 10)
-- **Single Email Analysis**: Present one email with full content
-- **Mistral Analysis**: Send to LM Studio for keep/delete recommendation
-- **Interactive Decision**: Accept/Reject/Skip with immediate IMAP tagging
-- **Prompt Learning**: Update classification rules based on user corrections
-- **Progress Tracking**: Resume from last processed email across sessions
-
-### Version 2.0 Future Features
-
-#### Multi-Account & Provider Support
-- **Gmail Multi-Account**: Support for 5 Gmail accounts
-- **Office 365 Integration**: Microsoft 365 IMAP with OAuth2
-- **Unified Configuration**: Single config file for all accounts
-
-#### TheBrain Integration
-- **Valuable Email Collection**: Automatic thought creation for important emails
-- **Metadata Preservation**: Sender, date, and content summary in TheBrain notes
-- **Categorization**: Smart tagging and linking in TheBrain structure
-
-#### Advanced Processing Modes
-- **Batch Processing**: Fully automated classification and staging
-- **Test Mode**: 10-email batches for validation
-- **Production Mode**: Large-scale processing with human review
-
-## Version 1.0 Usage Workflow
-
-### Interactive Processing Session
-1. **Initialize**: Connect to Gmail IMAP and LM Studio
-2. **Fetch Chunk**: Retrieve batch of unprocessed emails (configurable size)
-3. **Process Each Email**:
-   - Display email content (subject, sender, date, body preview)
-   - Send to Mistral via LM Studio API for keep/delete analysis
-   - Show LLM recommendation with reasoning
-   - Wait for human decision (Accept/Reject/Skip/Quit)
-4. **Update System**:
-   - Tag email in Gmail based on decision
-   - Log decision vs recommendation for learning
-   - Update LLM prompt if user provides correction rules
-5. **Continue**: Move to next email or fetch new chunk
-6. **Resume**: Save progress to resume later sessions
-
-### Output Format (Version 1.0)
+# 3. Optional: Verify system
+python verify_uid_system.py
 ```
-📧 Processing Email 3/10 from Inbox
 
-Subject: "Weekly Newsletter - Tech Updates"
-From: newsletter@techsite.com
-Date: 2025-01-15 14:30 PM
-Size: 15.2 KB
+## 📋 Overview
 
-Content Preview:
-"This week's top tech stories: AI breakthrough in..."
+EmailParse is an intelligent email management system that uses **local AI models** to analyze emails while keeping you in control of all decisions. It processes emails in **thread context**, automatically preserves **starred messages**, and only performs **tagging operations** (no deletion) for maximum safety.
 
-🤖 Mistral Analysis via LM Studio:
-Recommendation: DELETE
-Confidence: 75%
-Reasoning: Newsletter format, weekly cadence, mass distribution pattern
+### ✨ Key Features
+
+- **🧠 Thread-Aware Processing**: Analyzes entire email conversations, not just individual messages
+- **⭐ Smart Preservation**: Automatically keeps any thread containing starred messages  
+- **🔒 Safe Operations**: Only tags emails for review - never deletes anything
+- **🤖 Local AI**: Uses LM Studio with Mistral for private, offline email analysis
+- **👥 Human-in-the-Loop**: Interactive review of all AI recommendations
+- **🔄 Resume Processing**: Never processes the same email twice
+- **📊 Rich Interface**: Beautiful CLI with progress tracking and detailed previews
+
+## 🏗️ Architecture
+
+```
+📁 EmailParse/
+├── 🚀 User Entry Points
+│   ├── email_processor_v1.py      # Main application
+│   ├── setup_gmail.py             # Gmail setup utility  
+│   ├── fetch_emails.py            # Email fetching tool
+│   └── verify_uid_system.py       # System verification
+├── 🧠 Core Processing (core/)
+│   ├── email_analyzer.py          # AI email analysis
+│   ├── thread_analyzer.py         # Thread-aware analysis
+│   └── thread_processor.py        # Thread grouping & processing
+├── 🔌 External Clients (clients/)
+│   ├── gmail_client.py             # Full IMAP client
+│   ├── gmail_oauth.py              # OAuth2 authentication
+│   ├── gmail_api_client.py         # Gmail API client
+│   └── lmstudio_client.py          # LLM integration
+├── 💻 User Interface (ui/)
+│   └── interactive_cli.py          # Rich CLI interface
+├── 🛠️ Utilities (utils/)
+│   ├── config.py                   # Configuration management
+│   ├── prompt_engine.py            # Prompt handling
+│   └── markdown_exporter.py       # Email export functionality
+└── 🧪 Tests (tests/)
+    ├── unit/, integration/         # Comprehensive test suite
+    └── debug/                      # Debug utilities
+```
+
+## 🎯 How It Works
+
+### Thread-Aware Processing
+
+EmailParse groups emails by conversation threads and analyzes them together for better context:
+
+```
+📧 Thread: "Project Discussion"
+├── Message 1: "Let's discuss the requirements" 
+├── Message 2: "I agree with the timeline" ⭐ (starred)
+└── Message 3: "When do we start?"
+
+🤖 Analysis: KEEP_THREAD (auto-keep due to starred message)
+🏷️ Action: Tag all messages as important
+```
+
+### AI Analysis with Local Privacy
+
+- **Local Processing**: All AI analysis happens on your machine via LM Studio
+- **No Cloud Services**: Your emails never leave your computer
+- **Context-Aware**: Considers thread history, participants, and message importance
+- **Confidence Scoring**: Provides reasoning and confidence levels for all decisions
+
+### Safe Operations
+
+EmailParse **never deletes emails**. Instead it:
+- ✅ Tags emails for your review
+- ✅ Moves emails to folders you specify
+- ✅ Tracks all decisions in detailed logs
+- ❌ Never permanently removes anything
+
+## 📦 Installation
+
+### Prerequisites
+
+- **Python 3.8+**
+- **LM Studio** (for AI analysis) - [Download here](https://lmstudio.ai/)
+- **Gmail Account** with app-specific password or OAuth2 setup
+
+### Setup Steps
+
+1. **Clone and Install**
+   ```bash
+   git clone https://github.com/your-repo/EmailParse.git
+   cd EmailParse
+   pip install -r requirements.txt
+   ```
+
+2. **Configure Gmail Access**
+   ```bash
+   python setup_gmail.py
+   ```
+   This will guide you through:
+   - Setting up OAuth2 credentials
+   - Configuring Gmail IMAP access
+   - Testing the connection
+
+3. **Start LM Studio**
+   - Download and install [LM Studio](https://lmstudio.ai/)
+   - Load a Mistral model
+   - Start the local server (default: http://localhost:1234)
+
+4. **Run EmailParse**
+   ```bash
+   python email_processor_v1.py
+   ```
+
+## 🎮 Usage
+
+### Interactive Email Processing
+
+The main interface provides rich, interactive email review:
+
+```
+🔍 EmailParse v1.0 - Thread Processing Mode
+
+📊 Progress: 15/50 emails processed
+🧵 Current Thread: "Meeting Follow-up" (3 messages)
+
+┌─ Thread Analysis ─────────────────────────────────────────┐
+│ Participants: alice@company.com, bob@company.com         │
+│ Date Range: Jan 15-16, 2025                              │
+│ Contains: ⭐ 1 starred message                            │
+│                                                           │
+│ 🤖 AI Recommendation: KEEP_THREAD                        │
+│ 🎯 Confidence: 100% (auto-keep due to starred message)   │
+│ 💭 Reasoning: Thread contains starred message from Bob   │
+└───────────────────────────────────────────────────────────┘
 
 Your decision:
-[A] Accept - Tag as Junk-Candidate
-[R] Reject - Keep in inbox  
-[S] Skip - Leave unchanged
-[U] Update prompt with rule
-[Q] Quit session
-Choice: _
+[K] Keep entire thread    [D] Delete entire thread
+[M] Mixed (review individual messages)   [Q] Quit
+Choice: ▊
 ```
 
-### Version 1.0 File Structure
-- `email_processor_v1.py` - Main interactive processor
-- `gmail_client.py` - Gmail IMAP connection handler
-- `lmstudio_client.py` - LM Studio API integration
-- `prompt_engine.py` - Dynamic prompt management
-- `config_v1.yaml` - Single Gmail account configuration
-- `processed_log.jsonl` - Processing history and decisions
-- `prompts/` - LLM prompt templates and learned rules
+### Command Line Options
 
-This approach provides the security and control needed while avoiding API restrictions from email providers.
+```bash
+# Thread processing (default)
+python email_processor_v1.py --thread-mode
+
+# Individual email processing  
+python email_processor_v1.py --individual-mode
+
+# Limit number of emails
+python email_processor_v1.py --max-emails 20
+
+# Validate setup only
+python email_processor_v1.py --validate
+```
+
+## ⚙️ Configuration
+
+Configuration is managed in `config/config_v1.yaml`:
+
+```yaml
+gmail:
+  host: imap.gmail.com
+  port: 993
+  use_ssl: true
+  user: your-email@gmail.com
+  auth:
+    method: oauth2
+    oauth2:
+      client_id: your-client-id.apps.googleusercontent.com
+      client_secret: your-client-secret
+      token_file: gmail_tokens.json
+  processing:
+    batch_size: 10
+    junk_folder: Junk-Candidate
+
+lmstudio:
+  base_url: http://localhost:1234
+  model:
+    name: mistral
+    temperature: 0.3
+    max_tokens: 500
+
+app:
+  log_level: INFO
+  show_progress: true
+```
+
+## 🧪 Testing
+
+EmailParse includes comprehensive tests:
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test categories
+python -m pytest tests/unit/ -v          # Unit tests
+python -m pytest tests/integration/ -v   # Integration tests
+
+# Run specific functionality tests
+python tests/test_thread_processing.py    # Thread processing
+python tests/test_end_to_end_threads.py   # End-to-end integration
+```
+
+## 🔧 Utilities
+
+### System Verification
+```bash
+python verify_uid_system.py
+```
+Verifies UID tracking system prevents duplicate processing.
+
+### Email Fetching
+```bash
+python fetch_emails.py        # IMAP-based fetching
+python fetch_emails_api.py    # API-based fetching
+```
+
+### Gmail Setup
+```bash
+python setup_gmail.py
+```
+Interactive OAuth2 setup and connection testing.
+
+## 🛡️ Security & Privacy
+
+- **Local Processing**: All AI analysis happens on your machine
+- **OAuth2 Security**: Secure authentication with automatic token refresh
+- **No Data Sharing**: Your emails never leave your computer
+- **Safe Operations**: No email deletion, only tagging and organization
+- **Audit Trail**: Complete logging of all decisions and actions
+
+## 📈 Features Implemented
+
+### ✅ Core Features
+- [x] Thread-aware email processing
+- [x] Starred message auto-keep
+- [x] Local AI analysis with LM Studio
+- [x] Interactive human-in-the-loop interface
+- [x] OAuth2 Gmail authentication
+- [x] UID-based duplicate prevention
+- [x] Rich CLI with progress tracking
+- [x] Safe tagging-only operations
+- [x] Comprehensive logging
+
+### ✅ Advanced Features  
+- [x] Thread context analysis
+- [x] Confidence-based recommendations
+- [x] Dynamic prompt updates
+- [x] Markdown email export
+- [x] Session resume capability
+- [x] Batch and individual processing modes
+- [x] Detailed audit trails
+
+## 🗺️ Roadmap
+
+See [DEVPLAN.md](DEVPLAN.md) for detailed development phases and upcoming features.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Run tests (`python -m pytest tests/ -v`)
+4. Commit changes (`git commit -m 'Add amazing feature'`)
+5. Push to branch (`git push origin feature/amazing-feature`) 
+6. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-repo/EmailParse/issues)
+- **Documentation**: See files in the repository
+- **Configuration Help**: Run `python setup_gmail.py` for guided setup
+
+---
+
+**EmailParse** - Take control of your inbox with AI-powered, privacy-first email management! 🚀

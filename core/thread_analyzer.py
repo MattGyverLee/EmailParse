@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 
-from email_analyzer import EmailAnalysisResult
+from .email_analyzer import EmailAnalysisResult
 
 @dataclass
 class ThreadMessage:

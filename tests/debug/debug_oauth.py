@@ -15,7 +15,7 @@ def main():
     print("=" * 50)
     
     # Check config file
-    from emailparse.config import Config
+    from utils.config import Config
     
     try:
         config = Config("config/config_v1.yaml")
@@ -37,7 +37,7 @@ def main():
     print("\n[OAUTH] Testing OAuth2 configuration...")
     
     try:
-        from emailparse.gmail_oauth import GmailOAuth
+        from clients.gmail_oauth import GmailOAuth
         
         oauth = GmailOAuth(
             client_id=oauth_config.get('client_id'),

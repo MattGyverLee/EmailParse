@@ -17,10 +17,11 @@ from datetime import datetime
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from interactive_cli import InteractiveCLI
-from email_analyzer import EmailAnalyzer, EmailAnalysisResult
-from gmail_client_wrapper import GmailClientWrapper
-from thread_processor import ThreadProcessor
+from ui.interactive_cli import InteractiveCLI
+from core.email_analyzer import EmailAnalyzer, EmailAnalysisResult
+from clients.gmail_client_wrapper import GmailClientWrapper
+from core.thread_processor import ThreadProcessor
+from utils.config import Config
 
 class EmailProcessor:
     """Main email processing engine"""
@@ -33,7 +34,7 @@ class EmailProcessor:
             config_path: Path to configuration file
         """
         self.config_path = config_path
-        self.config = self.load_config()
+        self.config = Config(config_path)
         self.setup_logging()
         
         self.logger = logging.getLogger(__name__)
@@ -61,26 +62,11 @@ class EmailProcessor:
         self.recent_actions = []
         self.max_undo_actions = 10
     
-    def load_config(self) -> Dict[str, Any]:
-        """Load configuration from YAML file"""
-        try:
-            config_file = Path(self.config_path)
-            if not config_file.exists():
-                raise FileNotFoundError(f"Config file not found: {config_file}")
-            
-            with open(config_file, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f)
-            
-            return config
-            
-        except Exception as e:
-            print(f"Error loading config: {e}")
-            sys.exit(1)
-    
     def setup_logging(self):
         """Setup logging configuration"""
-        log_level = self.config.get('app', {}).get('log_level', 'INFO')
-        log_file = self.config.get('app', {}).get('log_file', 'logs/emailparse.log')
+        app_config = self.config.get_app_config()
+        log_level = app_config.get('log_level', 'INFO')
+        log_file = app_config.get('log_file', 'logs/emailparse.log')
         
         # Create logs directory if it doesn't exist
         log_path = Path(log_file)
@@ -103,15 +89,32 @@ class EmailProcessor:
         try:
             if Path(self.processed_log_file).exists():
                 with open(self.processed_log_file, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        if line.strip():
-                            entry = json.loads(line.strip())
-                            processed.add(entry.get('email_id'))
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+                        if line:
+                            try:
+                                entry = json.loads(line)
+                                email_id = entry.get('email_id')
+                                if email_id:
+                                    processed.add(email_id)
+                            except json.JSONDecodeError as je:
+                                self.logger.warning(f"Skipping malformed JSON on line {line_num}: {je}")
+                                continue
                 
                 self.logger.info(f"Loaded {len(processed)} processed email IDs")
             
         except Exception as e:
             self.logger.error(f"Error loading processed log: {e}")
+            # If log is completely corrupted, start fresh
+            if "Extra data" in str(e) or "JSONDecodeError" in str(e):
+                self.logger.warning("Processed log appears corrupted, starting with empty set")
+                try:
+                    # Backup the corrupted log
+                    corrupted_backup = f"{self.processed_log_file}.corrupted"
+                    Path(self.processed_log_file).rename(corrupted_backup)
+                    self.logger.info(f"Backed up corrupted log to {corrupted_backup}")
+                except Exception:
+                    pass
         
         return processed
     
@@ -154,12 +157,18 @@ class EmailProcessor:
             List of unprocessed email data
         """
         try:
-            batch_size = limit or self.config.get('gmail', {}).get('processing', {}).get('batch_size', 10)
+            processing_config = self.config.get_processing_config()
+            batch_size = limit or processing_config.get('batch_size', 10)
             
             self.logger.info(f"Fetching up to {batch_size} emails from Gmail")
             
-            # Fetch emails from Gmail (this method should exist from Phase 2)
-            all_emails = self.gmail_client.fetch_emails(limit=batch_size * 2)  # Fetch extra in case some are processed
+            # Fetch emails from Gmail - only add buffer if batch_size is large enough
+            if batch_size >= 10:
+                fetch_limit = batch_size + min(5, batch_size // 2)  # Add buffer for larger batches
+            else:
+                fetch_limit = batch_size  # For small batches, fetch exact amount
+            self.logger.info(f"Fetching {fetch_limit} emails from Gmail API")
+            all_emails = self.gmail_client.fetch_emails(limit=fetch_limit)
             
             # Filter out already processed emails
             unprocessed = []
@@ -208,12 +217,12 @@ class EmailProcessor:
             elif decision == "undo":
                 # Handle undo action
                 if self.undo_last_action():
-                    self.cli.console.print("[green]✓ Last action undone successfully[/green]")
+                    self.cli.console.print("[green]Last action undone successfully[/green]")
                     # Update session stats to reflect undo
                     if self.cli.session_stats['processed'] > 0:
                         self.cli.session_stats['processed'] -= 1
                 else:
-                    self.cli.console.print("[red]✗ Could not undo last action[/red]")
+                    self.cli.console.print("[red]Could not undo last action[/red]")
                 return True  # Continue processing
             
             # Process feedback and update prompt only when needed
@@ -270,14 +279,24 @@ class EmailProcessor:
             }
             
             if decision == "delete":
-                # Apply "Junk-Candidate" label
-                junk_label = self.config.get('gmail', {}).get('processing', {}).get('junk_folder', 'Junk-Candidate')
+                # Apply "Junk-Candidate" label and remove from Inbox
+                processing_config = self.config.get_processing_config()
+                junk_label = processing_config.get('junk_folder', 'Junk-Candidate')
                 
-                success = self.gmail_client.add_label(email_id, junk_label)
-                if success:
-                    self.logger.info(f"Applied '{junk_label}' label to email {email_id}")
+                # Add junk label
+                add_success = self.gmail_client.add_label(email_id, junk_label)
+                
+                # Remove from Inbox
+                remove_success = self.gmail_client.remove_label(email_id, 'INBOX')
+                
+                if add_success and remove_success:
+                    self.logger.info(f"Applied '{junk_label}' label and removed from Inbox for email {email_id}")
                     action_record['executed'] = True
-                    action_record['action_details'] = {'label_added': junk_label}
+                    action_record['action_details'] = {'label_added': junk_label, 'label_removed': 'INBOX'}
+                elif add_success:
+                    self.logger.info(f"Applied '{junk_label}' label to email {email_id} (Inbox removal may have failed)")
+                    action_record['executed'] = True
+                    action_record['action_details'] = {'label_added': junk_label, 'inbox_removal': 'failed'}
                 else:
                     self.logger.error(f"Failed to apply '{junk_label}' label to email {email_id}")
                     action_record['executed'] = False
@@ -450,7 +469,7 @@ class EmailProcessor:
             
             # Check for auto-keep conditions
             if thread_result.has_starred_messages:
-                self.cli.console.print(f"\\n[bold green]✦ Thread contains starred messages - AUTO KEEP[/bold green]")
+                self.cli.console.print(f"\\n[bold green]Thread contains starred messages - AUTO KEEP[/bold green]")
                 self.cli.console.print(f"[dim]Reason: {', '.join(thread_result.auto_keep_reasons)}[/dim]")
                 
                 # Auto-execute keep decisions for all messages
@@ -569,8 +588,12 @@ class EmailProcessor:
         if thread_result.thread_recommendation in ["KEEP_THREAD", "DELETE_THREAD"]:
             # Clear thread recommendation
             action = "keep" if thread_result.thread_recommendation == "KEEP_THREAD" else "delete"
-            if Confirm.ask(f"Accept AI recommendation to {action} entire thread?", default=True):
-                return f"thread_{action}"
+            try:
+                if Confirm.ask(f"Accept AI recommendation to {action} entire thread?", default=True):
+                    return f"thread_{action}"
+            except (EOFError, KeyboardInterrupt):
+                self.cli.console.print("\n[yellow]Session interrupted. Defaulting to keep thread for safety.[/yellow]")
+                return "thread_keep"
         
         # Show detailed options
         options_text = f"""
@@ -586,12 +609,16 @@ class EmailProcessor:
         self.cli.console.print(options_text)
         
         while True:
-            choice = Prompt.ask(
-                "Your decision",
-                choices=["k", "d", "m", "s", "q", "?", "help"],
-                default="k",
-                show_choices=False
-            ).lower()
+            try:
+                choice = Prompt.ask(
+                    "Your decision",
+                    choices=["k", "d", "m", "s", "q", "?", "help"],
+                    default="k",
+                    show_choices=False
+                ).lower()
+            except (EOFError, KeyboardInterrupt):
+                self.cli.console.print("\n[yellow]Session interrupted. Defaulting to keep thread for safety.[/yellow]")
+                return "thread_keep"
             
             if choice in ["?", "help"]:
                 self.show_thread_help()
@@ -613,28 +640,28 @@ class EmailProcessor:
 [bold]Thread Processing Help[/bold]
 
 [bold green]Thread Commands:[/bold green]
-• [green]K[/green] - Keep Thread: Mark all messages in thread as important
-• [red]D[/red] - Delete Thread: Mark all messages as junk candidates  
-• [yellow]M[/yellow] - Mixed: Process each message individually based on AI recommendations
-• [blue]S[/blue] - Skip: Skip this thread for now
-• [blue]Q[/blue] - Quit: Exit processing session
+- [green]K[/green] - Keep Thread: Mark all messages in thread as important
+- [red]D[/red] - Delete Thread: Mark all messages as junk candidates  
+- [yellow]M[/yellow] - Mixed: Process each message individually based on AI recommendations
+- [blue]S[/blue] - Skip: Skip this thread for now
+- [blue]Q[/blue] - Quit: Exit processing session
 
 [bold yellow]Thread Context:[/bold yellow]
 The AI analyzes the entire conversation context, considering:
-• Conversation flow and relationships between messages
-• All participants and their roles
-• Evolution of the discussion over time
-• Overall thread value vs individual message importance
+- Conversation flow and relationships between messages
+- All participants and their roles
+- Evolution of the discussion over time
+- Overall thread value vs individual message importance
 
 [bold blue]Special Rules:[/bold blue]
-• Messages with stars are AUTOMATICALLY kept (entire thread)
-• Only tagging operations are performed (no deletion)
-• Thread decisions apply to ALL messages in the conversation
+- Messages with stars are AUTOMATICALLY kept (entire thread)
+- Only tagging operations are performed (no deletion)
+- Thread decisions apply to ALL messages in the conversation
 
 [bold red]Safety:[/bold red]
-• Starred messages force the entire thread to be kept
-• When uncertain, choose Keep or Mixed for safer processing
-• You can review individual messages in Mixed mode
+- Starred messages force the entire thread to be kept
+- When uncertain, choose Keep or Mixed for safer processing
+- You can review individual messages in Mixed mode
 """
         
         from rich.panel import Panel
@@ -679,11 +706,20 @@ The AI analyzes the entire conversation context, considering:
         """Execute decision for a single message in thread context"""
         try:
             if action == "delete":
-                # Apply Junk-Candidate label
-                junk_label = self.config.get('gmail', {}).get('processing', {}).get('junk_folder', 'Junk-Candidate')
-                success = self.gmail_client.add_label(message_id, junk_label)
-                if success:
-                    self.logger.info(f"Applied '{junk_label}' label to message {message_id} in thread context")
+                # Apply Junk-Candidate label and remove from Inbox
+                processing_config = self.config.get_processing_config()
+                junk_label = processing_config.get('junk_folder', 'Junk-Candidate')
+                
+                # Add junk label
+                add_success = self.gmail_client.add_label(message_id, junk_label)
+                
+                # Remove from Inbox
+                remove_success = self.gmail_client.remove_label(message_id, 'INBOX')
+                
+                if add_success and remove_success:
+                    self.logger.info(f"Applied '{junk_label}' label and removed from Inbox for message {message_id} in thread context")
+                elif add_success:
+                    self.logger.info(f"Applied '{junk_label}' label to message {message_id} in thread context (Inbox removal may have failed)")
                 else:
                     self.logger.error(f"Failed to apply '{junk_label}' label to message {message_id}")
             elif action == "keep":
@@ -712,7 +748,7 @@ The AI analyzes the entire conversation context, considering:
         if issues:
             self.cli.console.print("\\n[bold red]Setup Issues:[/bold red]")
             for issue in issues:
-                self.cli.console.print(f"  • [red]{issue}[/red]")
+                self.cli.console.print(f"  - [red]{issue}[/red]")
             return False
         
         return True
@@ -723,7 +759,7 @@ def main():
     parser.add_argument("--config", default="config/config_v1.yaml", help="Config file path")
     parser.add_argument("--max-emails", type=int, help="Maximum number of emails to process")
     parser.add_argument("--validate", action="store_true", help="Only validate setup, don't process emails")
-    parser.add_argument("--thread-mode", action="store_true", default=True, help="Enable thread-aware processing (default)")
+    parser.add_argument("--thread-mode", action="store_true", help="Enable thread-aware processing (default)")
     parser.add_argument("--individual-mode", action="store_true", help="Process emails individually (legacy mode)")
     
     args = parser.parse_args()
@@ -735,12 +771,15 @@ def main():
         if args.validate:
             # Just validate setup
             if processor.validate_setup():
-                processor.cli.console.print("\\n[bold green]✅ All systems ready![/bold green]")
+                processor.cli.console.print("\\n[bold green]All systems ready![/bold green]")
             else:
                 sys.exit(1)
         else:
             # Determine processing mode
-            thread_mode = not args.individual_mode  # Default to thread mode unless individual specified
+            if args.individual_mode:
+                thread_mode = False
+            else:
+                thread_mode = True  # Default to thread mode
             
             # Run interactive session
             processor.run_interactive_session(args.max_emails, thread_mode=thread_mode)

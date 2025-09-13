@@ -68,7 +68,7 @@ def main():
     print("This will open your browser to authenticate with Gmail.")
     
     try:
-        from emailparse.gmail_oauth import interactive_gmail_setup
+        from clients.gmail_oauth import interactive_gmail_setup
         
         oauth = interactive_gmail_setup()
         if not oauth:

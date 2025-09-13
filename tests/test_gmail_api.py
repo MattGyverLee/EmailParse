@@ -14,8 +14,8 @@ def main():
     print("[TEST] Testing OAuth2 tokens with Gmail API...")
     
     try:
-        from emailparse.config import Config
-        from emailparse.gmail_oauth import GmailOAuth
+        from utils.config import Config
+        from clients.gmail_oauth import GmailOAuth
         
         # Load config
         config = Config("config/config_v1.yaml")

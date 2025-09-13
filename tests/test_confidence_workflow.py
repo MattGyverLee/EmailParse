@@ -8,10 +8,10 @@ import yaml
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from email_analyzer import EmailAnalyzer, EmailAnalysisResult
-from interactive_cli import InteractiveCLI
+from core.email_analyzer import EmailAnalyzer, EmailAnalysisResult
+from ui.interactive_cli import InteractiveCLI
 
 def load_config():
     """Load configuration for testing"""

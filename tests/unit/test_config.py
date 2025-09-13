@@ -6,7 +6,7 @@ import yaml
 from unittest.mock import patch, mock_open
 from pathlib import Path
 
-from emailparse.config import Config, ConfigError, load_config, get_config, reload_config
+from utils.config import Config, ConfigError, load_config, get_config, reload_config
 
 class TestConfig:
     """Test cases for Config class"""
@@ -211,10 +211,10 @@ class TestConfigHelperFunctions:
         assert config.get_nested('gmail', 'user') == 'test@gmail.com'
 
     @pytest.mark.unit
-    @patch('emailparse.config._config_instance', None)
+    @patch('utils.config._config_instance', None)
     def test_get_config_singleton(self):
         """Test get_config creates singleton instance"""
-        with patch('emailparse.config.Config') as mock_config_class:
+        with patch('utils.config.Config') as mock_config_class:
             mock_instance = mock_config_class.return_value
             
             # First call should create instance
@@ -231,8 +231,8 @@ class TestConfigHelperFunctions:
     @pytest.mark.unit
     def test_reload_config(self, sample_config_file):
         """Test reload_config function"""
-        with patch('emailparse.config._config_instance', None):
-            with patch('emailparse.config.Config._find_config_file') as mock_find:
+        with patch('utils.config._config_instance', None):
+            with patch('utils.config.Config._find_config_file') as mock_find:
                 mock_find.return_value = str(sample_config_file)
                 
                 # Load initial config

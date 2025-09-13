@@ -9,8 +9,8 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 from datetime import datetime
 
-from lmstudio_client import LMStudioClient
-from prompt_engine import PromptEngine
+from clients.lmstudio_client import LMStudioClient
+from utils.prompt_engine import PromptEngine
 
 @dataclass
 class EmailAnalysisResult:
@@ -191,11 +191,6 @@ class EmailAnalyzer:
             # Test LM Studio connection
             lm_connected = self.lm_client.test_connection()
             
-            # Get available models
-            models = []
-            if lm_connected:
-                models = self.lm_client.get_available_models()
-            
             # Get prompt stats
             prompt_stats = self.prompt_engine.get_prompt_stats()
             
@@ -204,7 +199,6 @@ class EmailAnalyzer:
                     "connected": lm_connected,
                     "base_url": self.lm_client.base_url,
                     "model_name": self.lm_client.model_name,
-                    "available_models": [model.get('id', 'unknown') for model in models],
                     "temperature": self.lm_client.temperature,
                     "max_tokens": self.lm_client.max_tokens
                 },
@@ -229,12 +223,6 @@ class EmailAnalyzer:
             # Check LM Studio connection
             if not self.lm_client.test_connection():
                 issues.append("LM Studio is not accessible - check if server is running")
-            
-            # Check if nous-hermes model is available
-            models = self.lm_client.get_available_models()
-            model_names = [model.get('id', '') for model in models]
-            if not any('nous-hermes' in name.lower() or 'mistral' in name.lower() for name in model_names):
-                issues.append("nous-hermes-2-mistral-7b-dpo model not found in LM Studio")
             
             # Check prompt file
             if not self.prompt_engine.prompt_file.exists():

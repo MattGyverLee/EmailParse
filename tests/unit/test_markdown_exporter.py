@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 import os
 
-from emailparse.markdown_exporter import MarkdownExporter
+from utils.markdown_exporter import MarkdownExporter
 from tests.fixtures import get_sample_email_batch, create_important_email
 
 class TestMarkdownExporter:
@@ -146,7 +146,7 @@ class TestMarkdownExporter:
         """Test batch export with automatic filename generation"""
         emails = get_sample_email_batch()[:3]  # Just use 3 emails
         
-        with patch('emailparse.markdown_exporter.datetime') as mock_datetime:
+        with patch('utils.markdown_exporter.datetime') as mock_datetime:
             mock_datetime.now.return_value.strftime.return_value = "20250115_143000"
             
             result_path = exporter.export_batch(emails)

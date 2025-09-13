@@ -49,7 +49,7 @@ class GmailAPIClient:
             logger.error(f"Gmail API authentication failed: {e}")
             raise GmailAPIError(f"Authentication failed: {e}")
     
-    def _make_request(self, url: str, params: Dict = None) -> Dict:
+    def _make_request(self, url: str, params: Dict = None, method: str = 'GET', json: Dict = None) -> Dict:
         """Make authenticated request to Gmail API"""
         if not self.access_token:
             raise GmailAPIError("Not authenticated - call authenticate() first")
@@ -59,7 +59,12 @@ class GmailAPIClient:
             'Content-Type': 'application/json'
         }
         
-        response = requests.get(url, headers=headers, params=params, timeout=30)
+        if method.upper() == 'GET':
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+        elif method.upper() == 'POST':
+            response = requests.post(url, headers=headers, json=json, timeout=30)
+        else:
+            raise GmailAPIError(f"Unsupported HTTP method: {method}")
         
         if response.status_code == 200:
             return response.json()
@@ -276,3 +281,93 @@ class GmailAPIClient:
         """Get Gmail profile information"""
         url = 'https://gmail.googleapis.com/gmail/v1/users/me/profile'
         return self._make_request(url)
+    
+    def add_label(self, message_id: str, label_name: str) -> bool:
+        """
+        Add a label to an email message
+        
+        Args:
+            message_id: Gmail message ID
+            label_name: Name of the label to add
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # First, get or create the label
+            label_id = self._get_or_create_label(label_name)
+            
+            # Add the label to the message
+            url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}/modify'
+            payload = {
+                'addLabelIds': [label_id]
+            }
+            
+            self._make_request(url, method='POST', json=payload)
+            logger.info(f"Added label '{label_name}' to message {message_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to add label '{label_name}' to message {message_id}: {e}")
+            return False
+    
+    def remove_label(self, message_id: str, label_name: str) -> bool:
+        """
+        Remove a label from an email message
+        
+        Args:
+            message_id: Gmail message ID
+            label_name: Name of the label to remove
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get the label ID
+            label_id = self._get_label_id(label_name)
+            if not label_id:
+                logger.warning(f"Label '{label_name}' not found")
+                return False
+            
+            # Remove the label from the message
+            url = f'https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}/modify'
+            payload = {
+                'removeLabelIds': [label_id]
+            }
+            
+            self._make_request(url, method='POST', json=payload)
+            logger.info(f"Removed label '{label_name}' from message {message_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to remove label '{label_name}' from message {message_id}: {e}")
+            return False
+    
+    def _get_or_create_label(self, label_name: str) -> str:
+        """Get label ID, creating the label if it doesn't exist"""
+        # First try to get existing label
+        label_id = self._get_label_id(label_name)
+        if label_id:
+            return label_id
+        
+        # Create new label
+        url = 'https://gmail.googleapis.com/gmail/v1/users/me/labels'
+        payload = {
+            'name': label_name,
+            'messageListVisibility': 'show',
+            'labelListVisibility': 'labelShow'
+        }
+        
+        response = self._make_request(url, method='POST', json=payload)
+        return response['id']
+    
+    def _get_label_id(self, label_name: str) -> Optional[str]:
+        """Get the ID of a label by name"""
+        url = 'https://gmail.googleapis.com/gmail/v1/users/me/labels'
+        response = self._make_request(url)
+        
+        for label in response.get('labels', []):
+            if label.get('name') == label_name:
+                return label.get('id')
+        
+        return None

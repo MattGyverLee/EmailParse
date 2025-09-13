@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from interactive_cli import InteractiveCLI
+from ui.interactive_cli import InteractiveCLI
 
 def test_prompt_diff():
     """Test the prompt diff display functionality"""

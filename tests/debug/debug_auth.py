@@ -15,8 +15,8 @@ def main():
     print("=" * 50)
     
     try:
-        from emailparse.config import Config
-        from emailparse.gmail_oauth import GmailOAuth
+        from utils.config import Config
+        from clients.gmail_oauth import GmailOAuth
         
         # Load config
         config = Config("config/config_v1.yaml")
@@ -60,7 +60,7 @@ def main():
             
             # Test basic IMAP connection without auth
             print(f"\n[IMAP] Testing basic IMAP connection...")
-            from emailparse.gmail_client import GmailClient
+            from clients.gmail_client import GmailClient
             
             client = GmailClient(config)
             client.connect()

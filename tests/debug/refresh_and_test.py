@@ -14,8 +14,8 @@ def main():
     print("[REFRESH] Force refreshing OAuth2 access token...")
     
     try:
-        from emailparse.config import Config
-        from emailparse.gmail_oauth import GmailOAuth
+        from utils.config import Config
+        from clients.gmail_oauth import GmailOAuth
         
         # Load config
         config = Config("config/config_v1.yaml")
@@ -51,7 +51,7 @@ def main():
                 # Now test Gmail connection
                 print(f"\n[GMAIL] Testing Gmail connection with fresh token...")
                 
-                from emailparse.gmail_client import GmailClient
+                from clients.gmail_client import GmailClient
                 
                 client = GmailClient(config)
                 
